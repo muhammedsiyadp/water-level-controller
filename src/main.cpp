@@ -21,7 +21,7 @@ const int MOTOR_START_MIN_VOLTAGE_CUTOFF = 185;
 const int MOTOR_START_MAX_VOLTAGE_CUTOFF = 245;
 const int MOTOR_RUN_MIN_VOLTAGE_CUTOFF = 165;
 const int VOLTAGE_CUTOFF_RETRY_TIME = 600;   // to be edited
-const int STARTER_SWITCH_DURATION = 5000; //duration in which the starter button is pressed
+const int STARTER_SWITCH_DURATION = 5000; //duration in which the starter button is pressed, give 0 to disable
 
 //variables
 bool motor_running = false; //global variable to check the motor if it is currently pumping or not
