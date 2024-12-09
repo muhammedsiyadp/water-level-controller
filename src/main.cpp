@@ -135,6 +135,11 @@ void loop(){
   }
 
   delay(300);
+  if (!motor_running && digitalRead(MANUAL_START_BUTTON_PIN)){
+    voltage_cutoff_status = false;
+    dryrun_cutoff_status = false;
+    start_motor();
+  }
   
 
 }
