@@ -1,6 +1,4 @@
 #include <Arduino.h>
-//constants
-unsigned long dryrun_timeout = 60; //seconds
 //Pinout
 #define LED_MOTOR_ON_PIN        14
 #define LED_DRY_RUN_CUTOFF_PIN  16
@@ -17,12 +15,20 @@ unsigned long dryrun_timeout = 60; //seconds
 #define SETUP_BUTTON_PIN         10
 
 #define VOLTAGE_SENSOR_PIN      A0
+//constants
+unsigned long DRYRUN_TIMOUT = 60; //seconds
+const int MOTOR_START_MIN_VOLTAGE_CUTOFF = 185;
+const int MOTOR_START_MAX_VOLTAGE_CUTOFF = 245;
+const int MOTOR_RUN_MIN_VOLTAGE_CUTOFF = 165;
+const int VOLTAGE_CUTOFF_RETRY_TIME = 600;   // to be edited
 
+//variables
 bool motor_running = false; //global variable to check the motor if it is currently pumping or not
 int motor_running_status = 0; // 0 for not running, 1 for just started( in this case dryrun is not checked), 2 running phase (check for dryrun)
-
-unsigned long current_millis;
 unsigned long starting_millis;
+unsigned long voltage_cutoff_millis;
+bool dryrun_cutoff_status = false;
+bool voltage_cutoff_status = false;
 
 void setup(){
   //setting up Pin Modes
@@ -47,14 +53,28 @@ void setup(){
   digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, LOW);
 }
 void start_motor(){
-  motor_running = true;
-  motor_running_status = 1;
-  digitalWrite(RELAY_MOTOR_PIN,HIGH);
+  if (dryrun_cutoff_status) return;
+  if (voltage_cutoff_status) {
+    if(millis() - voltage_cutoff_millis < VOLTAGE_CUTOFF_RETRY_TIME){
+      return;
+    }
+  }
+  if (check_voltage() >= MOTOR_START_MIN_VOLTAGE_CUTOFF && check_voltage() <= MOTOR_START_MAX_VOLTAGE_CUTOFF){
+    motor_running = true;
+    motor_running_status = 1;
+    starting_millis = millis();
+    digitalWrite(RELAY_MOTOR_PIN,HIGH);
+    digitalWrite(LED_LOW_HIGH_CUTOFF_PIN,LOW);
+    voltage_cutoff_status = false;
+    
+  }
+  else {
+    digitalWrite(LED_LOW_HIGH_CUTOFF_PIN,HIGH);
+  }
 }
 void stop_motor(){
   motor_running = false;
   motor_running_status = 0;
-  starting_millis = millis();
   digitalWrite(RELAY_MOTOR_PIN,LOW);
 }
 int check_voltage(){
@@ -78,17 +98,27 @@ void loop(){
     if (water_full){
       stop_motor();
     }
+    else if (check_voltage() < MOTOR_RUN_MIN_VOLTAGE_CUTOFF){
+      digitalWrite(LED_LOW_HIGH_CUTOFF_PIN,HIGH);
+      voltage_cutoff_millis = millis();
+      voltage_cutoff_status = true;
+      stop_motor();
+    }
     else if (motor_running_status == 1) {
-      if (millis() - starting_millis >= dryrun_timeout){
+      if (millis() - starting_millis >= DRYRUN_TIMOUT){
         motor_running_status = 2;
       }
     }
     else if (motor_running_status == 2){
       if (!motor_dry_run){
         stop_motor();
+        digitalWrite(LED_DRY_RUN_CUTOFF_PIN,HIGH);
+        dryrun_cutoff_status = true;
       }
     }
   }
+
+  delay(300);
   
 
 }
