@@ -67,6 +67,7 @@ void start_motor(){
     motor_running_status = 1;
     starting_millis = millis();
     digitalWrite(RELAY_MOTOR_PIN,HIGH);
+    digitalWrite(LED_MOTOR_ON_PIN, HIGH);
     digitalWrite(LED_LOW_HIGH_CUTOFF_PIN,LOW);
     voltage_cutoff_status = false;
     
@@ -78,6 +79,7 @@ void start_motor(){
 void stop_motor(){
   motor_running = false;
   motor_running_status = 0;
+  digitalWrite(LED_MOTOR_ON_PIN, LOW);
   digitalWrite(RELAY_MOTOR_PIN,LOW);
 }
 void loop(){
