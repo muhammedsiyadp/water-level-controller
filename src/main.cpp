@@ -1,220 +1,65 @@
-#include <WiFi.h>
-#include <WebServer.h>
-#include <EEPROM.h>
-#include <ArduinoJson.h>
+#include <Arduino.h>
+//Pinout
+#define LED_MOTOR_ON_PIN        14
+#define LED_DRY_RUN_CUTOFF_PIN  16
+#define LED_LOW_HIGH_CUTOFF_PIN 12
 
+#define RELAY_MOTOR_PIN         13
+#define RELAY_STARTER_PIN       9
 
+#define WATERLEVEL_LOW_PIN      4
+#define WATERLEVEL_FULL_PIN     2
+#define WATERLEVEL_DRYRUN_PIN   5
 
-// Web server running on port 80
-WebServer server(80);
+#define MANUAL_START_BUTTON_PIN  9
+#define SETUP_BUTTON_PIN         10
 
-// EEPROM size (adjust if necessary)
-#define EEPROM_SIZE 64
+#define VOLTAGE_SENSOR_PIN      A0
 
-// Structure to hold settings
-struct Settings {
-  float lowVoltage;
-  float highVoltage;
-  int dryRunTimeout;
-  int timerCutoff;
-};
+bool motor_running = false; //global variable to check the motor if it is currently pumping or not
 
-// Default settings
-Settings currentSettings = {10.0, 12.0, 5, 30};
+void setup(){
+  //setting up Pin Modes
+  pinMode(LED_MOTOR_ON_PIN, OUTPUT);
+  pinMode(LED_DRY_RUN_CUTOFF_PIN, OUTPUT);
+  pinMode(LED_LOW_HIGH_CUTOFF_PIN, OUTPUT);
+  pinMode(RELAY_MOTOR_PIN, OUTPUT);
+  pinMode(RELAY_STARTER_PIN, OUTPUT);
 
-// HTML content for the settings page
-const char* htmlPage = R"rawliteral(
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Water Controller Settings</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      background-color: #f4f4f9;
-      color: #333;
-    }
-    .container {
-      max-width: 600px;
-      width: 90%;
-      margin-top: 20px;
-      padding: 20px;
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-    h1 {
-      text-align: center;
-      color: #0078D7;
-    }
-    label {
-      font-weight: bold;
-      display: block;
-      margin-top: 15px;
-    }
-    input[type="number"], button {
-      width: 100%;
-      padding: 10px;
-      margin-top: 5px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      font-size: 16px;
-    }
-    button {
-      background-color: #0078D7;
-      color: white;
-      border: none;
-      cursor: pointer;
-      margin-top: 20px;
-    }
-    button:hover {
-      background-color: #005BB5;
-    }
-    .status {
-      margin-top: 15px;
-      text-align: center;
-      color: green;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>Water Controller Settings</h1>
-    <label for="lowVoltage">Low Voltage Threshold</label>
-    <input type="number" id="lowVoltage" placeholder="Enter Low Voltage" />
+  pinMode(WATERLEVEL_LOW_PIN, INPUT);
+  pinMode(WATERLEVEL_FULL_PIN, INPUT);
+  pinMode(WATERLEVEL_DRYRUN_PIN, INPUT);
 
-    <label for="highVoltage">High Voltage Threshold</label>
-    <input type="number" id="highVoltage" placeholder="Enter High Voltage" />
+  pinMode(MANUAL_START_BUTTON_PIN, INPUT);
+  pinMode(SETUP_BUTTON_PIN, INPUT);
 
-    <label for="dryRunTime">Dry-Run Timeout (seconds)</label>
-    <input type="number" id="dryRunTime" placeholder="Enter Dry-Run Timeout" />
-
-    <label for="timerCutoff">Timer Cutoff (seconds)</label>
-    <input type="number" id="timerCutoff" placeholder="Enter Timer Cutoff" />
-
-    <button onclick="saveSettings()">Save Settings</button>
-    <div id="status" class="status"></div>
-  </div>
-
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      fetch("/load").then(response => response.json()).then(data => {
-        document.getElementById("lowVoltage").value = data.lowVoltage;
-        document.getElementById("highVoltage").value = data.highVoltage;
-        document.getElementById("dryRunTime").value = data.dryRunTimeout;
-        document.getElementById("timerCutoff").value = data.timerCutoff;
-      });
-    });
-
-    function saveSettings() {
-      const lowVoltage = document.getElementById("lowVoltage").value;
-      const highVoltage = document.getElementById("highVoltage").value;
-      const dryRunTime = document.getElementById("dryRunTime").value;
-      const timerCutoff = document.getElementById("timerCutoff").value;
-
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/save", true);
-      xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-          document.getElementById("status").textContent = "Settings Saved!";
-        }
-      };
-      xhr.send(JSON.stringify({
-        lowVoltage,
-        highVoltage,
-        dryRunTimeout,
-        timerCutoff
-      }));
-    }
-  </script>
-</body>
-</html>
-)rawliteral";
-
-// Save settings to EEPROM
-void saveSettingsToEEPROM() {
-  EEPROM.put(0, currentSettings);
-  EEPROM.commit();
+  //ensuring all pins are low
+  digitalWrite(RELAY_MOTOR_PIN, LOW);
+  digitalWrite(RELAY_STARTER_PIN, LOW);
+  digitalWrite(LED_MOTOR_ON_PIN, LOW);
+  digitalWrite(LED_DRY_RUN_CUTOFF_PIN, LOW);
+  digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, LOW);
 }
-
-// Load settings from EEPROM
-void loadSettingsFromEEPROM() {
-  EEPROM.get(0, currentSettings);
-  // Ensure default settings if EEPROM data is invalid
-  if (isnan(currentSettings.lowVoltage) || isnan(currentSettings.highVoltage) || 
-      currentSettings.dryRunTimeout <= 0 || currentSettings.timerCutoff <= 0) {
-    currentSettings = {10.0, 12.0, 5, 30};
-    saveSettingsToEEPROM();
+void start_motor(){
+  motor_running = true;
+  digitalWrite(RELAY_MOTOR_PIN,HIGH);
+}
+void stop_motor(){
+  motor_running = false;
+  digitalWrite(RELAY_MOTOR_PIN,LOW);
+}
+int check_voltage(){
+  return analogRead(VOLTAGE_SENSOR_PIN);
+}
+void loop(){
+  bool water_low = digitalRead(WATERLEVEL_LOW_PIN);
+  bool water_full = digitalRead(WATERLEVEL_FULL_PIN);
+  bool motor_dry_run = digitalRead(WATERLEVEL_DRYRUN_PIN);
+  
+  if (!water_low && !water_full && !motor_running){
+    start_motor();
   }
-}
-
-// Handle root request
-void handleRoot() {
-  server.send(200, "text/html", htmlPage);
-}
-
-// Handle save settings request
-void handleSave() {
-  StaticJsonDocument<200> doc;
-  DeserializationError error = deserializeJson(doc, server.arg("plain"));
-
-  if (error) {
-    server.send(400, "application/json", "{\"status\": \"Invalid JSON\"}");
-    return;
+  else if (water_full && motor_running) {
+    stop_motor();
   }
-
-  currentSettings.lowVoltage = doc["lowVoltage"];
-  currentSettings.highVoltage = doc["highVoltage"];
-  currentSettings.dryRunTimeout = doc["dryRunTimeout"];
-  currentSettings.timerCutoff = doc["timerCutoff"];
-
-  saveSettingsToEEPROM();
-  server.send(200, "application/json", "{\"status\": \"Settings Saved\"}");
-}
-
-// Handle load settings request
-void handleLoad() {
-  StaticJsonDocument<200> doc;
-  doc["lowVoltage"] = currentSettings.lowVoltage;
-  doc["highVoltage"] = currentSettings.highVoltage;
-  doc["dryRunTimeout"] = currentSettings.dryRunTimeout;
-  doc["timerCutoff"] = currentSettings.timerCutoff;
-
-  String jsonResponse;
-  serializeJson(doc, jsonResponse);
-  server.send(200, "application/json", jsonResponse);
-}
-
-void setup() {
-  Serial.begin(115200);
-
-  // Initialize EEPROM
-  EEPROM.begin(EEPROM_SIZE);
-  loadSettingsFromEEPROM();
-
-  // Start the Access Point
-  const char* ssid = "ESP32-WaterController";
-  const char* password = "12345678";
-  WiFi.softAP(ssid, password);
-
-  Serial.print("Access Point IP: ");
-  Serial.println(WiFi.softAPIP());
-
-  // Configure server routes
-  server.on("/", handleRoot);
-  server.on("/save", HTTP_POST, handleSave);
-  server.on("/load", HTTP_GET, handleLoad);
-  server.begin();
-}
-
-void loop() {
-  server.handleClient();
 }
