@@ -52,6 +52,9 @@ void setup(){
   digitalWrite(LED_DRY_RUN_CUTOFF_PIN, LOW);
   digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, LOW);
 }
+int check_voltage(){
+  return analogRead(VOLTAGE_SENSOR_PIN);
+}
 void start_motor(){
   if (dryrun_cutoff_status) return;
   if (voltage_cutoff_status) {
@@ -76,9 +79,6 @@ void stop_motor(){
   motor_running = false;
   motor_running_status = 0;
   digitalWrite(RELAY_MOTOR_PIN,LOW);
-}
-int check_voltage(){
-  return analogRead(VOLTAGE_SENSOR_PIN);
 }
 void loop(){
   bool water_low = digitalRead(WATERLEVEL_LOW_PIN);
