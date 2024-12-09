@@ -21,6 +21,7 @@ const int MOTOR_START_MIN_VOLTAGE_CUTOFF = 185;
 const int MOTOR_START_MAX_VOLTAGE_CUTOFF = 245;
 const int MOTOR_RUN_MIN_VOLTAGE_CUTOFF = 165;
 const int VOLTAGE_CUTOFF_RETRY_TIME = 600;   // to be edited
+const int STARTER_SWITCH_DURATION = 5000; //duration in which the starter button is pressed
 
 //variables
 bool motor_running = false; //global variable to check the motor if it is currently pumping or not
@@ -29,6 +30,7 @@ unsigned long starting_millis;
 unsigned long voltage_cutoff_millis;
 bool dryrun_cutoff_status = false;
 bool voltage_cutoff_status = false;
+bool starter_status = false;
 
 void setup(){
   //setting up Pin Modes
@@ -61,6 +63,9 @@ void start_motor(){
     if(millis() - voltage_cutoff_millis < VOLTAGE_CUTOFF_RETRY_TIME){
       return;
     }
+    else {
+      voltage_cutoff_status = false;
+    }
   }
   if (check_voltage() >= MOTOR_START_MIN_VOLTAGE_CUTOFF && check_voltage() <= MOTOR_START_MAX_VOLTAGE_CUTOFF){
     motor_running = true;
@@ -69,7 +74,10 @@ void start_motor(){
     digitalWrite(RELAY_MOTOR_PIN,HIGH);
     digitalWrite(LED_MOTOR_ON_PIN, HIGH);
     digitalWrite(LED_LOW_HIGH_CUTOFF_PIN,LOW);
-    voltage_cutoff_status = false;
+    if (STARTER_SWITCH_DURATION != 0){
+      digitalWrite(RELAY_STARTER_PIN,HIGH);
+      starter_status = true;
+    }
     
   }
   else {
@@ -81,6 +89,8 @@ void stop_motor(){
   motor_running_status = 0;
   digitalWrite(LED_MOTOR_ON_PIN, LOW);
   digitalWrite(RELAY_MOTOR_PIN,LOW);
+  digitalWrite(RELAY_STARTER_PIN,LOW);
+  starter_status = false;
 }
 void loop(){
   bool water_low = digitalRead(WATERLEVEL_LOW_PIN);
@@ -117,6 +127,10 @@ void loop(){
         digitalWrite(LED_DRY_RUN_CUTOFF_PIN,HIGH);
         dryrun_cutoff_status = true;
       }
+    }
+    if (starter_status && (millis() - starting_millis >= STARTER_SWITCH_DURATION)){
+      starter_status = false;
+      digitalWrite(RELAY_STARTER_PIN,LOW);
     }
   }
 
