@@ -1,176 +1,177 @@
 #include <Arduino.h>
-#include <EEPROM.h>
-//Pinout
-#define LED_MOTOR_ON_PIN        14
-#define LED_DRY_RUN_CUTOFF_PIN  16
-#define LED_LOW_HIGH_CUTOFF_PIN 12
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+#include <ArduinoJson.h>
 
-#define RELAY_MOTOR_PIN         13
-#define RELAY_STARTER_PIN       9
+// Define your hotspot credentials
+const char* ssid = "ESP32_Hotspot";
+const char* password = "12345678";
 
-#define WATERLEVEL_LOW_PIN      4
-#define WATERLEVEL_FULL_PIN     2
-#define WATERLEVEL_DRYRUN_PIN   5
+// Create AsyncWebServer object on port 80
+AsyncWebServer server(80);
 
-#define MANUAL_START_BUTTON_PIN  9
-#define SETUP_BUTTON_PIN         10
+// Variables to store data
+String var1 = "Variable 1";
+String var2 = "Variable 2";
+String var3 = "Variable 3";
+String var4 = "Variable 4";
+String var5 = "Variable 5";
+String var6 = "Variable 6";
 
-#define VOLTAGE_SENSOR_PIN      A0
-struct configs {  //struct to control he 
-  int dryrun_timout;
-  int starter_switch_duration;
-  int voltage_cutoff_retry_time;
-  int motor_start_min_volt;
-  int motor_start_max_volt;
-  int motor_run_min_volt;
-};
-//constants give the default values here
-int DRYRUN_TIMOUT = 60; //millli seconds
-int MOTOR_START_MIN_VOLTAGE_CUTOFF = 185;
-int MOTOR_START_MAX_VOLTAGE_CUTOFF = 245;
-int MOTOR_RUN_MIN_VOLTAGE_CUTOFF = 165;
-int VOLTAGE_CUTOFF_RETRY_TIME = 600;   // milliseconds
-int STARTER_SWITCH_DURATION = 5000; //millis secondsduration in which the starter button is pressed, give 0 to disable
+// HTML content for the webpage
+const char htmlPage[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Variable Editor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #f4f4f9;
+        }
+        .container {
+            width: 90%;
+            max-width: 400px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #status {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Edit Variables</h1>
+        <form id="variableForm">
+            <label for="var1">Variable 1:</label>
+            <input type="text" id="var1" value="%VAR1%">
 
-//variables
-bool motor_running = false; //global variable to check the motor if it is currently pumping or not
-int motor_running_status = 0; // 0 for not running, 1 for just started( in this case dryrun is not checked), 2 running phase (check for dryrun)
-unsigned long starting_millis;
-unsigned long voltage_cutoff_millis;
-bool dryrun_cutoff_status = false;
-bool voltage_cutoff_status = false;
-bool starter_status = false;
+            <label for="var2">Variable 2:</label>
+            <input type="text" id="var2" value="%VAR2%">
 
+            <label for="var3">Variable 3:</label>
+            <input type="text" id="var3" value="%VAR3%">
 
-void saveSettingsToEEPROM(configs currentSettings) { //save settings to config
-  EEPROM.put(0, currentSettings);
-  EEPROM.commit();
+            <label for="var4">Variable 4:</label>
+            <input type="text" id="var4" value="%VAR4%">
+
+            <label for="var5">Variable 5:</label>
+            <input type="text" id="var5" value="%VAR5%">
+
+            <label for="var6">Variable 6:</label>
+            <input type="text" id="var6" value="%VAR6%">
+
+            <button type="button" onclick="saveData()">Save</button>
+        </form>
+        <p id="status"></p>
+    </div>
+    <script>
+        function saveData() {
+            const formData = new FormData(document.getElementById('variableForm'));
+            const data = {};
+            formData.forEach((value, key) => data[key] = value);
+
+            fetch('/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.text())
+            .then(message => {
+                document.getElementById('status').textContent = message;
+            });
+        }
+    </script>
+</body>
+</html>
+)rawliteral";
+
+void setup() {
+  // Start Serial communication
+  Serial.begin(115200);
+
+  // Configure ESP32 as an Access Point
+  WiFi.softAP(ssid, password);
+  Serial.println("Access Point started");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.softAPIP());
+
+  // Serve the webpage
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String html = htmlPage;
+    html.replace("%VAR1%", var1);
+    html.replace("%VAR2%", var2);
+    html.replace("%VAR3%", var3);
+    html.replace("%VAR4%", var4);
+    html.replace("%VAR5%", var5);
+    html.replace("%VAR6%", var6);
+    request->send(200, "text/html", html);
+  });
+
+  // Save the variables
+  server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    String json = String((char*)data);
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, json);
+
+    var1 = doc["var1"].as<String>();
+    var2 = doc["var2"].as<String>();
+    var3 = doc["var3"].as<String>();
+    var4 = doc["var4"].as<String>();
+    var5 = doc["var5"].as<String>();
+    var6 = doc["var6"].as<String>();
+
+    request->send(200, "text/plain", "Variables saved successfully!");
+  });
+
+  // Start the server
+  server.begin();
 }
-void loadSettingsFromEEPROM() {
-  configs current_config;
-  EEPROM.get(0, current_config);
-  // Ensure default settings if EEPROM data is invalid
-  if (isnan(current_config.motor_start_min_volt) || isnan(current_config.motor_start_max_volt) || isnan(current_config.motor_run_min_volt) || 
-      current_config.dryrun_timout <= 0 || current_config.voltage_cutoff_retry_time <= 0) {
-        //to add later when data is invalid
-  }
-  else {
-    DRYRUN_TIMOUT = current_config.dryrun_timout * 1000; //seconds
-    MOTOR_START_MIN_VOLTAGE_CUTOFF = current_config.motor_start_min_volt;
-    MOTOR_START_MAX_VOLTAGE_CUTOFF = current_config.motor_start_max_volt;
-    MOTOR_RUN_MIN_VOLTAGE_CUTOFF = current_config.motor_run_min_volt;
-    VOLTAGE_CUTOFF_RETRY_TIME = current_config.voltage_cutoff_retry_time * 1000;  
-    STARTER_SWITCH_DURATION = current_config.starter_switch_duration * 1000;
-  }
-}
-void setup(){
-  //setting up Pin Modes
-  pinMode(LED_MOTOR_ON_PIN, OUTPUT);
-  pinMode(LED_DRY_RUN_CUTOFF_PIN, OUTPUT);
-  pinMode(LED_LOW_HIGH_CUTOFF_PIN, OUTPUT);
-  pinMode(RELAY_MOTOR_PIN, OUTPUT);
-  pinMode(RELAY_STARTER_PIN, OUTPUT);
 
-  pinMode(WATERLEVEL_LOW_PIN, INPUT);
-  pinMode(WATERLEVEL_FULL_PIN, INPUT);
-  pinMode(WATERLEVEL_DRYRUN_PIN, INPUT);
-
-  pinMode(MANUAL_START_BUTTON_PIN, INPUT);
-  pinMode(SETUP_BUTTON_PIN, INPUT);
-
-  //ensuring all pins are low
-  digitalWrite(RELAY_MOTOR_PIN, LOW);
-  digitalWrite(RELAY_STARTER_PIN, LOW);
-  digitalWrite(LED_MOTOR_ON_PIN, LOW);
-  digitalWrite(LED_DRY_RUN_CUTOFF_PIN, LOW);
-  digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, LOW);
-}
-int check_voltage(){
-  return analogRead(VOLTAGE_SENSOR_PIN);
-}
-void start_motor(){
-  if (dryrun_cutoff_status) return;
-  if (voltage_cutoff_status) {
-    if(millis() - voltage_cutoff_millis < VOLTAGE_CUTOFF_RETRY_TIME){
-      return;
-    }
-    else {
-      voltage_cutoff_status = false;
-    }
-  }
-  if (check_voltage() >= MOTOR_START_MIN_VOLTAGE_CUTOFF && check_voltage() <= MOTOR_START_MAX_VOLTAGE_CUTOFF){
-    motor_running = true;
-    motor_running_status = 1;
-    starting_millis = millis();
-    digitalWrite(RELAY_MOTOR_PIN,HIGH);
-    digitalWrite(LED_MOTOR_ON_PIN, HIGH);
-    digitalWrite(LED_LOW_HIGH_CUTOFF_PIN,LOW);
-    if (STARTER_SWITCH_DURATION != 0){
-      digitalWrite(RELAY_STARTER_PIN,HIGH);
-      starter_status = true;
-    }
-    
-  }
-  else {
-    digitalWrite(LED_LOW_HIGH_CUTOFF_PIN,HIGH);
-  }
-}
-void stop_motor(){
-  motor_running = false;
-  motor_running_status = 0;
-  digitalWrite(LED_MOTOR_ON_PIN, LOW);
-  digitalWrite(RELAY_MOTOR_PIN,LOW);
-  digitalWrite(RELAY_STARTER_PIN,LOW);
-  starter_status = false;
-}
-void loop(){
-  bool water_low = digitalRead(WATERLEVEL_LOW_PIN);
-  bool water_full = digitalRead(WATERLEVEL_FULL_PIN);
-  bool motor_dry_run = digitalRead(WATERLEVEL_DRYRUN_PIN);
-
-
-  if (!motor_running){
-    if (!water_low && !water_full){
-      start_motor();
-    }
-    else if (!water_low && water_full){
-      //error condition
-    }
-  }
-  else {  //motor is running
-    if (water_full){
-      stop_motor();
-    }
-    else if (check_voltage() < MOTOR_RUN_MIN_VOLTAGE_CUTOFF){
-      digitalWrite(LED_LOW_HIGH_CUTOFF_PIN,HIGH);
-      voltage_cutoff_millis = millis();
-      voltage_cutoff_status = true;
-      stop_motor();
-    }
-    else if (motor_running_status == 1) {
-      if (millis() - starting_millis >= DRYRUN_TIMOUT){
-        motor_running_status = 2;
-      }
-    }
-    else if (motor_running_status == 2){
-      if (!motor_dry_run){
-        stop_motor();
-        digitalWrite(LED_DRY_RUN_CUTOFF_PIN,HIGH);
-        dryrun_cutoff_status = true;
-      }
-    }
-    if (starter_status && (millis() - starting_millis >= STARTER_SWITCH_DURATION)){
-      starter_status = false;
-      digitalWrite(RELAY_STARTER_PIN,LOW);
-    }
-  }
-
-  delay(300);
-  if (!motor_running && digitalRead(MANUAL_START_BUTTON_PIN)){
-    voltage_cutoff_status = false;
-    dryrun_cutoff_status = false;
-    start_motor();
-  }
-  
-
+void loop() {
+  // Nothing to do here
 }
