@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 //Pinout
 #define LED_MOTOR_ON_PIN        14
 #define LED_DRY_RUN_CUTOFF_PIN  16
@@ -15,13 +16,21 @@
 #define SETUP_BUTTON_PIN         10
 
 #define VOLTAGE_SENSOR_PIN      A0
-//constants
-unsigned long DRYRUN_TIMOUT = 60; //seconds
-const int MOTOR_START_MIN_VOLTAGE_CUTOFF = 185;
-const int MOTOR_START_MAX_VOLTAGE_CUTOFF = 245;
-const int MOTOR_RUN_MIN_VOLTAGE_CUTOFF = 165;
-const int VOLTAGE_CUTOFF_RETRY_TIME = 600;   // to be edited
-const int STARTER_SWITCH_DURATION = 5000; //duration in which the starter button is pressed, give 0 to disable
+struct configs {  //struct to control he 
+  int dryrun_timout;
+  int starter_switch_duration;
+  int voltage_cutoff_retry_time;
+  int motor_start_min_volt;
+  int motor_start_max_volt;
+  int motor_run_min_volt;
+};
+//constants give the default values here
+int DRYRUN_TIMOUT = 60; //millli seconds
+int MOTOR_START_MIN_VOLTAGE_CUTOFF = 185;
+int MOTOR_START_MAX_VOLTAGE_CUTOFF = 245;
+int MOTOR_RUN_MIN_VOLTAGE_CUTOFF = 165;
+int VOLTAGE_CUTOFF_RETRY_TIME = 600;   // milliseconds
+int STARTER_SWITCH_DURATION = 5000; //millis secondsduration in which the starter button is pressed, give 0 to disable
 
 //variables
 bool motor_running = false; //global variable to check the motor if it is currently pumping or not
@@ -32,6 +41,28 @@ bool dryrun_cutoff_status = false;
 bool voltage_cutoff_status = false;
 bool starter_status = false;
 
+
+void saveSettingsToEEPROM(configs currentSettings) { //save settings to config
+  EEPROM.put(0, currentSettings);
+  EEPROM.commit();
+}
+void loadSettingsFromEEPROM() {
+  configs current_config;
+  EEPROM.get(0, current_config);
+  // Ensure default settings if EEPROM data is invalid
+  if (isnan(current_config.motor_start_min_volt) || isnan(current_config.motor_start_max_volt) || isnan(current_config.motor_run_min_volt) || 
+      current_config.dryrun_timout <= 0 || current_config.voltage_cutoff_retry_time <= 0) {
+        //to add later when data is invalid
+  }
+  else {
+    DRYRUN_TIMOUT = current_config.dryrun_timout * 1000; //seconds
+    MOTOR_START_MIN_VOLTAGE_CUTOFF = current_config.motor_start_min_volt;
+    MOTOR_START_MAX_VOLTAGE_CUTOFF = current_config.motor_start_max_volt;
+    MOTOR_RUN_MIN_VOLTAGE_CUTOFF = current_config.motor_run_min_volt;
+    VOLTAGE_CUTOFF_RETRY_TIME = current_config.voltage_cutoff_retry_time * 1000;  
+    STARTER_SWITCH_DURATION = current_config.starter_switch_duration * 1000;
+  }
+}
 void setup(){
   //setting up Pin Modes
   pinMode(LED_MOTOR_ON_PIN, OUTPUT);
