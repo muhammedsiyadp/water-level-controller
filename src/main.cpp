@@ -1,4 +1,3 @@
-#include <Arduino.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -88,28 +87,43 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         <h1>Edit Variables</h1>
         <form id="variableForm">
             <label for="var1">Variable 1:</label>
-            <input type="text" id="var1" value="%VAR1%">
+            <input type="text" id="var1">
 
             <label for="var2">Variable 2:</label>
-            <input type="text" id="var2" value="%VAR2%">
+            <input type="text" id="var2">
 
             <label for="var3">Variable 3:</label>
-            <input type="text" id="var3" value="%VAR3%">
+            <input type="text" id="var3">
 
             <label for="var4">Variable 4:</label>
-            <input type="text" id="var4" value="%VAR4%">
+            <input type="text" id="var4">
 
             <label for="var5">Variable 5:</label>
-            <input type="text" id="var5" value="%VAR5%">
+            <input type="text" id="var5">
 
             <label for="var6">Variable 6:</label>
-            <input type="text" id="var6" value="%VAR6%">
+            <input type="text" id="var6">
 
             <button type="button" onclick="saveData()">Save</button>
         </form>
         <p id="status"></p>
     </div>
     <script>
+        // Load current variables from the ESP32
+        function loadVariables() {
+            fetch('/variables')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('var1').value = data.var1;
+                    document.getElementById('var2').value = data.var2;
+                    document.getElementById('var3').value = data.var3;
+                    document.getElementById('var4').value = data.var4;
+                    document.getElementById('var5').value = data.var5;
+                    document.getElementById('var6').value = data.var6;
+                });
+        }
+
+        // Save variables and reload updated values
         function saveData() {
             const formData = new FormData(document.getElementById('variableForm'));
             const data = {};
@@ -123,8 +137,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .then(response => response.text())
             .then(message => {
                 document.getElementById('status').textContent = message;
+                loadVariables(); // Reload updated variables
             });
         }
+
+        // Load variables when the page is loaded
+        window.onload = loadVariables;
     </script>
 </body>
 </html>
@@ -140,19 +158,27 @@ void setup() {
   Serial.print("IP Address: ");
   Serial.println(WiFi.softAPIP());
 
-  // Serve the webpage
+  // Serve the main page
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String html = htmlPage;
-    html.replace("%VAR1%", var1);
-    html.replace("%VAR2%", var2);
-    html.replace("%VAR3%", var3);
-    html.replace("%VAR4%", var4);
-    html.replace("%VAR5%", var5);
-    html.replace("%VAR6%", var6);
-    request->send(200, "text/html", html);
+    request->send_P(200, "text/html", htmlPage);
   });
 
-  // Save the variables
+  // Serve the current variable values in JSON format
+  server.on("/variables", HTTP_GET, [](AsyncWebServerRequest *request) {
+    DynamicJsonDocument doc(1024);
+    doc["var1"] = "hello";
+    doc["var2"] = var2;
+    doc["var3"] = var3;
+    doc["var4"] = var4;
+    doc["var5"] = var5;
+    doc["var6"] = var6;
+
+    String json;
+    serializeJson(doc, json);
+    request->send(200, "application/json", json);
+  });
+
+  // Save updated variables
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     String json = String((char*)data);
     DynamicJsonDocument doc(1024);
