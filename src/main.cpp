@@ -25,6 +25,7 @@ struct configs {
   int motor_start_min_volt;
   int motor_start_max_volt;
   int motor_run_min_volt;
+  int voltage_calibration;
 };
 
 // Constants give the default values here
@@ -34,6 +35,7 @@ int MOTOR_START_MAX_VOLTAGE_CUTOFF = 260;
 int MOTOR_RUN_MIN_VOLTAGE_CUTOFF = 165;
 int VOLTAGE_CUTOFF_RETRY_TIME = 600; // seconds
 int STARTER_SWITCH_DURATION = 5; // seconds
+int VOLTAGE_CALIBRATION = 2.1;
 
 // Variables
 volatile bool manual_start_button_pressed = false;
@@ -68,6 +70,7 @@ void loadSettingsFromEEPROM() {
     MOTOR_RUN_MIN_VOLTAGE_CUTOFF = current_config.motor_run_min_volt;
     VOLTAGE_CUTOFF_RETRY_TIME = current_config.voltage_cutoff_retry_time * 1000;  
     STARTER_SWITCH_DURATION = current_config.starter_switch_duration * 1000;
+    VOLTAGE_CALIBRATION = current_config.voltage_calibration;
   }
 }
 
@@ -103,10 +106,24 @@ int check_voltage(int numReadings = 10) {
   long accumulated_voltage = 0;
   for (int i = 0; i < numReadings; i++) {
     accumulated_voltage += analogRead(VOLTAGE_SENSOR_PIN);
-    delay(50); 
+    delay(50);
+  } 
+  int voltage = accumulated_voltage / numReadings;
+  if (VOLTAGE_CALIBRATION != 0) {
+    voltage /= VOLTAGE_CALIBRATION;
   }
-  int voltage = accumulated_voltage / numReadings /2.1;
   Serial.print("Voltage: ");
+  Serial.println(voltage);
+  return voltage;
+}
+int check_voltage_raw(int numReadings = 10) {
+  long accumulated_voltage = 0;
+  for (int i = 0; i < numReadings; i++) {
+    accumulated_voltage += analogRead(VOLTAGE_SENSOR_PIN);
+    delay(50);
+  } 
+  int voltage = accumulated_voltage / numReadings;
+  Serial.print("Raw Voltage: ");
   Serial.println(voltage);
   return voltage;
 }
