@@ -1,15 +1,15 @@
 #include <Arduino.h>
 #include <EEPROM.h>
 //Pinout
-#define LED_MOTOR_ON_PIN        14
-#define LED_DRY_RUN_CUTOFF_PIN  16
-#define LED_LOW_HIGH_CUTOFF_PIN 12
+#define LED_MOTOR_ON_PIN        16
+#define LED_DRY_RUN_CUTOFF_PIN  14
+#define LED_LOW_HIGH_CUTOFF_PIN 2
 
 #define RELAY_MOTOR_PIN         13
-#define RELAY_STARTER_PIN       9
+#define RELAY_STARTER_PIN       10
 
-#define WATERLEVEL_LOW_PIN      4
-#define WATERLEVEL_FULL_PIN     2
+#define WATERLEVEL_LOW_PIN      12
+#define WATERLEVEL_FULL_PIN     4
 #define WATERLEVEL_DRYRUN_PIN   5
 
 #define MANUAL_START_BUTTON_PIN  9
@@ -84,9 +84,18 @@ void setup(){
   digitalWrite(LED_MOTOR_ON_PIN, LOW);
   digitalWrite(LED_DRY_RUN_CUTOFF_PIN, LOW);
   digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, LOW);
+
+  
+
+
 }
-int check_voltage(){
-  return analogRead(VOLTAGE_SENSOR_PIN);
+int check_voltage(int numReadings = 10){
+  long accumulated_voltage = 0;
+  for (int i = 0; i < numReadings; i++) {
+    accumulated_voltage += analogRead(VOLTAGE_SENSOR_PIN);
+    delay(50); 
+  }
+  return accumulated_voltage / numReadings;
 }
 void start_motor(){
   if (dryrun_cutoff_status) return;
@@ -123,10 +132,26 @@ void stop_motor(){
   digitalWrite(RELAY_STARTER_PIN,LOW);
   starter_status = false;
 }
+bool check_input_pin(int pin, int timeout = 1){ //retrun the input after some filtering . 1 means there is water on the pin, 0 means no water, timout is in seconds
+  for (int i = 0; i <= timeout * 100 ;i++){
+    if (!digitalRead(pin)) {
+      break;
+    } 
+    delay(10);
+  }
+  for (int i = 0; i <= timeout * 100;i++){
+    if (!digitalRead(pin)) {
+      return true;
+    } 
+    delay(10);
+    
+  }
+  return false;
+}
 void loop(){
-  bool water_low = digitalRead(WATERLEVEL_LOW_PIN);
-  bool water_full = digitalRead(WATERLEVEL_FULL_PIN);
-  bool motor_dry_run = digitalRead(WATERLEVEL_DRYRUN_PIN);
+  bool water_low = check_input_pin(WATERLEVEL_LOW_PIN);
+  bool water_full = check_input_pin(WATERLEVEL_FULL_PIN);
+  bool motor_dry_run = check_input_pin(WATERLEVEL_DRYRUN_PIN);
 
 
   if (!motor_running){
@@ -174,3 +199,4 @@ void loop(){
   
 
 }
+
