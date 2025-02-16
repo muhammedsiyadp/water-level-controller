@@ -95,9 +95,9 @@ String generateHTML() {
   html += "header { background: #6200ea; color: #fff; padding: 1rem 0; text-align: center; }";
   html += "h1, h2 { margin: 0.5rem; }";
   html += "form { max-width: 600px; margin: 2rem auto; padding: 1rem; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }";
-  html += "input[type='number'], input[type='text'], input[type='submit'] { width: calc(100% - 22px); margin: 0.5rem 0; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }";
-  html += "input[type='submit'] { background: #6200ea; color: #fff; border: none; cursor: pointer; }";
-  html += "input[type='submit']:hover { background: #4500b0; }";
+  html += "input[type='number'], input[type='text'], input[type='submit'], button { width: calc(100% - 22px); margin: 0.5rem 0; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }";
+  html += "input[type='submit'], button { background: #6200ea; color: #fff; border: none; cursor: pointer; }";
+  html += "input[type='submit']:hover, button:hover { background: #4500b0; }";
   html += "footer { text-align: center; margin: 1rem; font-size: 0.9rem; color: #666; }";
   html += "</style></head><body>";
   html += "<header><h1>Smart Water Level Controller</h1><h2>by Lucent Technologies</h2></header>";
@@ -119,7 +119,13 @@ String generateHTML() {
   html += "<label>VOLTAGE_CALIBRATION:</label><input type='text' name='VOLTAGE_CALIBRATION' id='timer1' value='0'><br>";
   html += "<input type='submit' value='Save'>";
   html += "</form>";
+  html += "<button onclick='exitAndRestart()'>Exit</button>";
   html += "<script>";
+  html += "function exitAndRestart() {";
+  html += "  fetch('/exit').then(() => {";
+  html += "    window.close();";
+  html += "  });";
+  html += "}";
   html += "setInterval(() => {";
   html += "  fetch('/timer').then(response => response.text()).then(data => {";
   html += "    document.getElementById('timer').innerText = data;";
@@ -196,6 +202,11 @@ void handleRoot() {
   //Serial.println("Root page requested");
   server.send(200, "text/html", generateHTML());
 }
+void handleExit() {
+  server.send(200, "text/plain", "Restarting...");
+  delay(1000);
+  ESP.restart();
+}
 // Handle saving variables
 void handleSave() {
   if (server.hasArg("DRYRUN_TIMOUT")) DRYRUN_TIMOUT = server.arg("DRYRUN_TIMOUT").toInt();
@@ -268,6 +279,7 @@ void setup() {
     server.on("/", handleRoot);
     server.on("/save", HTTP_POST, handleSave);
     server.on("/timer", handleTimer);
+    server.on("/exit", handleExit);
 
     server.begin();
     Serial.println("Web server started");
