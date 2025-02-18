@@ -2,7 +2,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <EEPROM.h>
-
 // Pinout
 #define LED_MOTOR_ON_PIN        16
 #define LED_DRY_RUN_CUTOFF_PIN  14
@@ -32,12 +31,15 @@ int VOLTAGE_CUTOFF_RETRY_TIME = 600; // seconds
 int STARTER_SWITCH_DURATION = 5; // seconds
 float VOLTAGE_CALIBRATION = 2.1;
 int SAFETY_TIMEOUT = 30; // minutes
+int WATER_FULL_DETECTED_BUFFER = 10000; // milliseconds
+int VOLTAGE_ABNORMALITY_BUFFER = 10000; // milliseconds
+int DRYRUN_DETECTION_BUFFER = 120000; // milliseconds // 2 minutes
 
 // Variables
 volatile bool manual_start_button_pressed = false;
 bool motor_running = false;
 int motor_running_status = 0; // 0 for not running, 1 for just started, 2 running phase
-unsigned long starting_millis;
+unsigned long motor_starting_millis;
 unsigned long voltage_cutoff_millis;
 bool dryrun_cutoff_status = false;
 bool safety_timeout_status = false;
@@ -48,6 +50,13 @@ float live_voltage_raw = 0;
 bool water_low = false;  // global status of water level in low pin
 bool water_full = false;
 bool motor_dry_run = false;
+bool water_full_detected = false;
+unsigned long water_full_detected_millis;
+bool voltage_abnormality_detected = false;
+unsigned long voltage_abnormality_detected_millis;
+bool motor_dry_run_detected = false;
+unsigned long motor_dry_run_detected_millis;
+
 
 bool setup_mode = false;
 
@@ -332,28 +341,23 @@ void start_motor() {
   if (dryrun_cutoff_status) return;
   if (safety_timeout_status) return;
   if (voltage_cutoff_status) {
-    if ((millis() - voltage_cutoff_millis) < VOLTAGE_CUTOFF_RETRY_TIME * 1000) {
-      return;
-    } else {
-      voltage_cutoff_status = false;
-    }
+    if ((millis() - voltage_cutoff_millis) < VOLTAGE_CUTOFF_RETRY_TIME * 1000) return;
+    else voltage_cutoff_status = false;
   }
   if (live_voltage >= MOTOR_START_MIN_VOLTAGE_CUTOFF && live_voltage <= MOTOR_START_MAX_VOLTAGE_CUTOFF) {
     motor_running = true;
-    motor_running_status = 1;
-    starting_millis = millis();
+    motor_starting_millis = millis();
     digitalWrite(RELAY_MOTOR_PIN, HIGH);
     digitalWrite(LED_MOTOR_ON_PIN, HIGH);
     digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, LOW);
     Serial.println("Motor started");
     if (STARTER_SWITCH_DURATION != 0) {
       digitalWrite(RELAY_STARTER_PIN, HIGH);
-      Serial.println("Shello");
       starter_status = true;
       Serial.println("Starter relay activated");
-      //delay(5000);
     }
-  } else {
+  } 
+  else {
     digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, HIGH);
     Serial.println("Voltage out of range, motor not started");
   }
@@ -377,7 +381,7 @@ void loop() {
     server.handleClient();
     
   }
-  else {
+  else { // Normal operation
     server.handleClient();
 
     Serial.print("Water Low: ");
@@ -388,41 +392,83 @@ void loop() {
     Serial.println(motor_dry_run);
 
     if (!motor_running) {
+      if (dryrun_cutoff_status){
+        digitalWrite(LED_DRY_RUN_CUTOFF_PIN, millis()/500 % 2);
+      }
       if (!water_low && !water_full) {
         start_motor();
-      } else if (!water_low && water_full) {
+      } 
+      else if (!water_low && water_full) {
         Serial.println("Error condition: Water low and full at the same time");
       }
-    } else { // Motor is running
+    } 
+    else { // Motor is running
       if (water_full) {
-        stop_motor();
+        if (!water_full_detected){
+          water_full_detected = true;
+          water_full_detected_millis = millis();
+        }
+        else if (millis() - water_full_detected_millis >= WATER_FULL_DETECTED_BUFFER) {
+          stop_motor();
+          Serial.println("Water full detected, motor stopped");
+          water_full_detected = false;
+        }
+        
       } 
-      else if (live_voltage < MOTOR_RUN_MIN_VOLTAGE_CUTOFF) {
-        digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, HIGH);
-        voltage_cutoff_millis = millis();
-        voltage_cutoff_status = true;
-        stop_motor();
-        Serial.println("Voltage below minimum, motor stopped");
+      else {
+        water_full_detected = false;
+      }
+
+      if (live_voltage < MOTOR_RUN_MIN_VOLTAGE_CUTOFF || live_voltage > MOTOR_START_MAX_VOLTAGE_CUTOFF) {
+        if (!voltage_abnormality_detected) {
+          voltage_abnormality_detected = true;
+          voltage_abnormality_detected_millis = millis();
+        } 
+        else if (millis() - voltage_abnormality_detected_millis >= VOLTAGE_ABNORMALITY_BUFFER) {
+          digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, HIGH);
+          voltage_cutoff_millis = millis();
+          voltage_cutoff_status = true;
+          stop_motor();
+          voltage_abnormality_detected = false;
+          Serial.println("Voltage out of range, motor stopped");
+        }
+      }
+      else {
+        voltage_abnormality_detected = false;
       } 
-      else if (motor_running_status == 1) {
-        if (millis() - starting_millis >= DRYRUN_TIMOUT * 1000) {
+      if (motor_running_status == 1) {
+        if (motor_dry_run) {
+          motor_running_status = 2;
+          Serial.println("water detected detected, motor started running phase");
+        }
+        else if (millis() - motor_starting_millis >= DRYRUN_TIMOUT * 1000) {
           motor_running_status = 2;
         }
       } 
       else if (motor_running_status == 2) {
         if (!motor_dry_run && DRYRUN_TIMOUT != 0) {
-          stop_motor();
-          digitalWrite(LED_DRY_RUN_CUTOFF_PIN, HIGH);
-          dryrun_cutoff_status = true;
-          Serial.println("Dry run detected, motor stopped");
+          if (!motor_dry_run_detected) {
+            motor_dry_run_detected = true;
+            motor_dry_run_detected_millis = millis();
+          }
+          else if (millis() - motor_dry_run_detected_millis >= DRYRUN_DETECTION_BUFFER) {
+            stop_motor();
+            digitalWrite(LED_DRY_RUN_CUTOFF_PIN, HIGH);
+            dryrun_cutoff_status = true;
+            Serial.println("Dry run detected, motor stopped");
+            motor_dry_run_detected = false;
+          }
+        }
+        else {
+          motor_dry_run_detected = false;
         }
       }
-      if (starter_status && (millis() - starting_millis >= STARTER_SWITCH_DURATION * 1000)) {
+      if (starter_status && (millis() - motor_starting_millis >= STARTER_SWITCH_DURATION * 1000)) {
         starter_status = false;
         digitalWrite(RELAY_STARTER_PIN, LOW);
         Serial.println("Starter relay deactivated");
       }
-      if (SAFETY_TIMEOUT != 0 && millis() - starting_millis >= SAFETY_TIMEOUT * 60 * 1000) {
+      if (SAFETY_TIMEOUT != 0 && millis() - motor_starting_millis >= SAFETY_TIMEOUT * 60000) {
         stop_motor();
         safety_timeout_status = true;
         digitalWrite(LED_DRY_RUN_CUTOFF_PIN, HIGH);
@@ -445,5 +491,6 @@ void loop() {
       }
     }
   }
+  delay(30);
   
 }
