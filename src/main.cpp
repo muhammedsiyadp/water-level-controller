@@ -10,9 +10,9 @@
 #define RELAY_MOTOR_PIN         13
 #define RELAY_STARTER_PIN       10
 
-#define WATERLEVEL_LOW_PIN      12
+#define WATERLEVEL_LOW_PIN      5
 #define WATERLEVEL_FULL_PIN     4
-#define WATERLEVEL_DRYRUN_PIN   5
+#define WATERLEVEL_DRYRUN_PIN   12
 
 #define MANUAL_START_BUTTON_PIN  9
 //#define SETUP_BUTTON_PIN         10
@@ -182,7 +182,7 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.2,float update_d
   }
   if (millis() - last_update_millis_voltage >= update_delay_voltage * 1000) {
     last_update_millis_voltage = millis();
-
+    //Serial.println("Updating voltage");
     // Update buffers
     voltage_buffer[buffer_index_voltage] = analogRead(VOLTAGE_SENSOR_PIN);
 
@@ -376,7 +376,7 @@ void stop_motor() {
 
 
 void loop() {
-
+  update_pin_statuses_and_voltage();
   if (setup_mode) {
     server.handleClient();
     
@@ -390,6 +390,8 @@ void loop() {
     Serial.println(water_full);
     Serial.print("Motor Dry Run: ");
     Serial.println(motor_dry_run);
+    Serial.print("Voltage: ");
+    Serial.println(live_voltage);
 
     if (!motor_running) {
       if (dryrun_cutoff_status){
