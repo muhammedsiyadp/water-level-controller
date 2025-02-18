@@ -10,9 +10,9 @@
 #define RELAY_MOTOR_PIN         13
 #define RELAY_STARTER_PIN       10
 
-#define WATERLEVEL_LOW_PIN      12
+#define WATERLEVEL_LOW_PIN      5
 #define WATERLEVEL_FULL_PIN     4
-#define WATERLEVEL_DRYRUN_PIN   5
+#define WATERLEVEL_DRYRUN_PIN   12
 
 #define MANUAL_START_BUTTON_PIN  9
 //#define SETUP_BUTTON_PIN         10
