@@ -145,7 +145,7 @@ String generateHTML() {
   html += "</body></html>";
   return html;
 }
-void update_pin_statuses_and_voltage(float update_delay_pin = 0.2,float update_delay_voltage = 0.05) {
+void update_pin_statuses_and_voltage(float update_delay_pin = 0.4,float update_delay_voltage = 0.05) {
   static unsigned long last_update_millis_pins = 0;
   static unsigned long last_update_millis_voltage = 0;
   static bool water_low_buffer[5] = {false};
@@ -176,9 +176,9 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.2,float update_d
       if (motor_dry_run_buffer[i]) motor_dry_run_count++;
     }
 
-    water_low = (water_low_count >= 3);
-    water_full = (water_full_count >= 3);
-    motor_dry_run = (motor_dry_run_count >= 3);
+    water_low = (water_low_count >= 2);
+    water_full = (water_full_count >= 2);
+    motor_dry_run = (motor_dry_run_count >= 2);
   }
   if (millis() - last_update_millis_voltage >= update_delay_voltage * 1000) {
     last_update_millis_voltage = millis();
@@ -376,7 +376,7 @@ void stop_motor() {
 
 
 void loop() {
-
+  update_pin_statuses_and_voltage();
   if (setup_mode) {
     server.handleClient();
     
