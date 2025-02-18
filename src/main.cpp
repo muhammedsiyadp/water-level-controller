@@ -253,7 +253,18 @@ void IRAM_ATTR manual_start_button_isr() {
   manual_start_button_pressed = true;
   digitalWrite(LED_MOTOR_ON_PIN, HIGH);
 }
-
+void booting(int duration_sec = 20) { //duration to wait for system to start. during this time all leds will be blinking to indicate system is booting
+  for (int i = 0; i < duration_sec *2; i++){
+    digitalWrite(LED_MOTOR_ON_PIN, !(i % 2));
+    digitalWrite(LED_DRY_RUN_CUTOFF_PIN, !(i % 2));
+    digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, !(i % 2));
+    int last_local_time = millis();
+    while(millis() - last_local_time < 500){
+      server.handleClient();
+      delay(1);
+    }
+  }
+}
 
 void setup() {
   Serial.begin(115200); // Initialize serial communication at 9600 baud rate
@@ -288,7 +299,9 @@ void setup() {
   
     pinMode(MANUAL_START_BUTTON_PIN, INPUT);
     attachInterrupt(digitalPinToInterrupt(MANUAL_START_BUTTON_PIN), manual_start_button_isr, FALLING);
-  
+    Serial.println("Booting");
+    booting();
+    Serial.println("Booting complete");
 
   
   // Setting up Pin Modes
@@ -319,7 +332,7 @@ void start_motor() {
   if (dryrun_cutoff_status) return;
   if (safety_timeout_status) return;
   if (voltage_cutoff_status) {
-    if (millis() - voltage_cutoff_millis < VOLTAGE_CUTOFF_RETRY_TIME * 1000) {
+    if ((millis() - voltage_cutoff_millis) < VOLTAGE_CUTOFF_RETRY_TIME * 1000) {
       return;
     } else {
       voltage_cutoff_status = false;
@@ -383,17 +396,20 @@ void loop() {
     } else { // Motor is running
       if (water_full) {
         stop_motor();
-      } else if (live_voltage < MOTOR_RUN_MIN_VOLTAGE_CUTOFF) {
+      } 
+      else if (live_voltage < MOTOR_RUN_MIN_VOLTAGE_CUTOFF) {
         digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, HIGH);
         voltage_cutoff_millis = millis();
         voltage_cutoff_status = true;
         stop_motor();
         Serial.println("Voltage below minimum, motor stopped");
-      } else if (motor_running_status == 1) {
+      } 
+      else if (motor_running_status == 1) {
         if (millis() - starting_millis >= DRYRUN_TIMOUT * 1000) {
           motor_running_status = 2;
         }
-      } else if (motor_running_status == 2) {
+      } 
+      else if (motor_running_status == 2) {
         if (!motor_dry_run && DRYRUN_TIMOUT != 0) {
           stop_motor();
           digitalWrite(LED_DRY_RUN_CUTOFF_PIN, HIGH);
