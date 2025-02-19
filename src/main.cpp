@@ -161,6 +161,7 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.4,float update_d
     water_low_buffer[buffer_index_pins] = !digitalRead(WATERLEVEL_LOW_PIN);
     water_full_buffer[buffer_index_pins] = !digitalRead(WATERLEVEL_FULL_PIN);
     motor_dry_run_buffer[buffer_index_pins] = !digitalRead(WATERLEVEL_DRYRUN_PIN);
+    
 
     // Increment buffer index
     buffer_index_pins = (buffer_index_pins + 1) % 5;
@@ -176,9 +177,9 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.4,float update_d
       if (motor_dry_run_buffer[i]) motor_dry_run_count++;
     }
 
-    water_low = (water_low_count >= 2);
-    water_full = (water_full_count >= 2);
-    motor_dry_run = (motor_dry_run_count >= 2);
+    water_low = (water_low_count >= 1);
+    water_full = (water_full_count >= 1);
+    motor_dry_run = (motor_dry_run_count >= 1);
   }
   if (millis() - last_update_millis_voltage >= update_delay_voltage * 1000) {
     last_update_millis_voltage = millis();
@@ -384,12 +385,18 @@ void loop() {
   else { // Normal operation
     server.handleClient();
 
-    Serial.print("Water Low: ");
-    Serial.println(water_low);
-    Serial.print("Water Full: ");
-    Serial.println(water_full);
-    Serial.print("Motor Dry Run: ");
-    Serial.println(motor_dry_run);
+    Serial.print("Water Low:\t");
+    Serial.print(water_low);
+    Serial.print("\tWater Full:\t");
+    Serial.print(water_full);
+    Serial.print("\tMotor Dry Run:\t");
+    Serial.print(motor_dry_run);
+    Serial.print("\tVoltage:\t");
+    Serial.print(live_voltage);
+    Serial.print("\tMotor Running:\t");
+    Serial.print(motor_running);
+    Serial.print("\tMotor Running Status:\t");
+    Serial.println(motor_running_status);
 
     if (!motor_running) {
       if (dryrun_cutoff_status){
