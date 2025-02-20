@@ -6,15 +6,22 @@
 #define LED_MOTOR_ON_PIN        16
 #define LED_DRY_RUN_CUTOFF_PIN  14
 #define LED_LOW_HIGH_CUTOFF_PIN 2
+
 #define RELAY_MOTOR_PIN         13
 #define RELAY_STARTER_PIN       10
+
 #define WATERLEVEL_LOW_PIN      5
 #define WATERLEVEL_FULL_PIN     4
 #define WATERLEVEL_DRYRUN_PIN   12
+
 #define MANUAL_START_BUTTON_PIN  9
 //#define SETUP_BUTTON_PIN         10
+
 #define VOLTAGE_SENSOR_PIN      A0
+
 #define EEPROM_SIZE 64
+
+
 // Constants give the default values here
 int DRYRUN_TIMOUT = 20; // seconds
 int MOTOR_START_MIN_VOLTAGE_CUTOFF = 185;
@@ -27,6 +34,7 @@ int SAFETY_TIMEOUT = 30; // minutes
 int WATER_FULL_DETECTED_BUFFER = 10000; // milliseconds
 int VOLTAGE_ABNORMALITY_BUFFER = 10000; // milliseconds
 int DRYRUN_DETECTION_BUFFER = 120000; // milliseconds // 2 minutes
+
 // Variables
 volatile bool manual_start_button_pressed = false;
 bool motor_running = false;
@@ -48,10 +56,15 @@ bool voltage_abnormality_detected = false;
 unsigned long voltage_abnormality_detected_millis;
 bool motor_dry_run_detected = false;
 unsigned long motor_dry_run_detected_millis;
+
+
 bool setup_mode = false;
+
 const char* ssid = "Lucent water level controller";
 const char* password = "12345678";
+
 ESP8266WebServer server(80);
+
 void saveToEEPROM() {
   EEPROM.begin(EEPROM_SIZE);
   EEPROM.put(0, DRYRUN_TIMOUT);
@@ -65,6 +78,7 @@ void saveToEEPROM() {
   EEPROM.put(32, 7); // Reserved for future use
   EEPROM.commit();
 }
+
 // Helper function to load variables from EEPROM
 void loadFromEEPROM() {
   EEPROM.begin(EEPROM_SIZE);
@@ -80,6 +94,7 @@ void loadFromEEPROM() {
   EEPROM.get(24, VOLTAGE_CALIBRATION);
   EEPROM.get(28, SAFETY_TIMEOUT);
 }
+
 // Generate HTML page
 String generateHTML() {
   String html = "<html><head>";
@@ -141,39 +156,43 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.4,float update_d
   static int buffer_index_voltage = 0;
   if (millis() - last_update_millis_pins >= update_delay_pin * 1000) {
     last_update_millis_pins = millis();
+
     // Update buffers
     water_low_buffer[buffer_index_pins] = !digitalRead(WATERLEVEL_LOW_PIN);
     water_full_buffer[buffer_index_pins] = !digitalRead(WATERLEVEL_FULL_PIN);
     motor_dry_run_buffer[buffer_index_pins] = !digitalRead(WATERLEVEL_DRYRUN_PIN);
-
+    
 
     // Increment buffer index
     buffer_index_pins = (buffer_index_pins + 1) % 5;
+
     // Check occurrences in buffers
     int water_low_count = 0;
     int water_full_count = 0;
     int motor_dry_run_count = 0;
+
     for (int i = 0; i < 5; i++) {
       if (water_low_buffer[i]) water_low_count++;
       if (water_full_buffer[i]) water_full_count++;
       if (motor_dry_run_buffer[i]) motor_dry_run_count++;
     }
 
-    water_low = (water_low_count >= 2);
-    water_full = (water_full_count >= 2);
-    motor_dry_run = (motor_dry_run_count >= 2);
     water_low = (water_low_count >= 1);
     water_full = (water_full_count >= 1);
     motor_dry_run = (motor_dry_run_count >= 1);
   }
   if (millis() - last_update_millis_voltage >= update_delay_voltage * 1000) {
     last_update_millis_voltage = millis();
+
     // Update buffers
     voltage_buffer[buffer_index_voltage] = analogRead(VOLTAGE_SENSOR_PIN);
+
     // Increment buffer index
     buffer_index_voltage = (buffer_index_voltage + 1) % 5;
+
     // Check occurrences in buffers
     float voltage_sum = 0;
+
     for (int i = 0; i < 5; i++) {
       voltage_sum += voltage_buffer[i];
     }
@@ -184,6 +203,7 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.4,float update_d
     else {
       live_voltage = live_voltage_raw;
     }
+
   }
 }
 // Handle root page
@@ -213,6 +233,7 @@ void handleSave() {
   }
   if (server.hasArg("SAFETY_TIMEOUT")) SAFETY_TIMEOUT = server.arg("SAFETY_TIMEOUT").toInt();
   
+
   saveToEEPROM();
   server.send(200, "text/html", R"rawliteral(
 <!DOCTYPE html>
@@ -254,10 +275,12 @@ void booting(int duration_sec = 20) { //duration to wait for system to start. du
     }
   }
 }
+
 void setup() {
   Serial.begin(115200); // Initialize serial communication at 9600 baud rate
   EEPROM.begin(EEPROM_SIZE);
   loadFromEEPROM();
+
   //pinMode(MANUAL_START_BUTTON_PIN, INPUT);
   Serial.println("Starting setup");
   Serial.println("Checking for setup switch");
@@ -266,9 +289,11 @@ void setup() {
   pinMode(LED_LOW_HIGH_CUTOFF_PIN, OUTPUT);
   pinMode(RELAY_MOTOR_PIN, OUTPUT);
   pinMode(RELAY_STARTER_PIN, OUTPUT);
+
   pinMode(WATERLEVEL_LOW_PIN, INPUT);
   pinMode(WATERLEVEL_FULL_PIN, INPUT);
   pinMode(WATERLEVEL_DRYRUN_PIN, INPUT);
+
     WiFi.softAP(ssid, password);
     Serial.println("WiFi started");
   // Setup web server routes
@@ -276,6 +301,7 @@ void setup() {
     server.on("/save", HTTP_POST, handleSave);
     server.on("/timer", handleTimer);
     server.on("/exit", handleExit);
+
     server.begin();
     Serial.println("Web server started");
   
@@ -286,6 +312,7 @@ void setup() {
     Serial.println("Booting");
     booting();
     Serial.println("Booting complete");
+
   
   // Setting up Pin Modes
   pinMode(LED_MOTOR_ON_PIN, OUTPUT);
@@ -293,18 +320,24 @@ void setup() {
   pinMode(LED_LOW_HIGH_CUTOFF_PIN, OUTPUT);
   pinMode(RELAY_MOTOR_PIN, OUTPUT);
   pinMode(RELAY_STARTER_PIN, OUTPUT);
+
   pinMode(WATERLEVEL_LOW_PIN, INPUT);
   pinMode(WATERLEVEL_FULL_PIN, INPUT);
   pinMode(WATERLEVEL_DRYRUN_PIN, INPUT);
+
   //pinMode(SETUP_BUTTON_PIN, INPUT);
+
   // Ensuring all pins are low
   digitalWrite(RELAY_MOTOR_PIN, LOW);
   digitalWrite(RELAY_STARTER_PIN, LOW);
   digitalWrite(LED_MOTOR_ON_PIN, LOW);
   digitalWrite(LED_DRY_RUN_CUTOFF_PIN, LOW);
   digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, LOW);
+
   Serial.println("Setup complete");
 }
+
+
 void start_motor() {
   if (dryrun_cutoff_status) return;
   if (safety_timeout_status) return;
@@ -331,6 +364,7 @@ void start_motor() {
   }
   motor_running_status = 1;
 }
+
 void stop_motor() {
   motor_running = false;
   motor_running_status = 0;
@@ -340,6 +374,9 @@ void stop_motor() {
   starter_status = false;
   Serial.println("Motor stopped");
 }
+
+
+
 void loop() {
   update_pin_statuses_and_voltage();
   if (setup_mode) {
@@ -349,12 +386,6 @@ void loop() {
   else { // Normal operation
     server.handleClient();
 
-    Serial.print("Water Low: ");
-    Serial.println(water_low);
-    Serial.print("Water Full: ");
-    Serial.println(water_full);
-    Serial.print("Motor Dry Run: ");
-    Serial.println(motor_dry_run);
     Serial.print("Water Low:\t");
     Serial.print(water_low);
     Serial.print("\tWater Full:\t");
@@ -395,6 +426,7 @@ void loop() {
       else {
         water_full_detected = false;
       }
+
       if (live_voltage < MOTOR_RUN_MIN_VOLTAGE_CUTOFF || live_voltage > MOTOR_START_MAX_VOLTAGE_CUTOFF) {
         if (!voltage_abnormality_detected) {
           voltage_abnormality_detected = true;
@@ -452,6 +484,7 @@ void loop() {
         Serial.println("Safety timeout reached, motor stopped");
       }
     }
+
     //delay(300);
     if (manual_start_button_pressed) {
       manual_start_button_pressed = false;
