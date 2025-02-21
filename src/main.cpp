@@ -347,6 +347,7 @@ void start_motor() {
   }
   if (live_voltage >= MOTOR_START_MIN_VOLTAGE_CUTOFF && live_voltage <= MOTOR_START_MAX_VOLTAGE_CUTOFF) {
     motor_running = true;
+    motor_running_status = 1;
     motor_starting_millis = millis();
     digitalWrite(RELAY_MOTOR_PIN, HIGH);
     digitalWrite(LED_MOTOR_ON_PIN, HIGH);
@@ -362,7 +363,7 @@ void start_motor() {
     digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, HIGH);
     Serial.println("Voltage out of range, motor not started");
   }
-  motor_running_status = 1;
+  
 }
 
 void stop_motor() {
