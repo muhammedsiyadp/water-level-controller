@@ -46,8 +46,7 @@ bool dryrun_cutoff_status = false;
 bool safety_timeout_status = false;
 bool voltage_cutoff_status = false;
 bool starter_status = false;
-float live_voltage = 0;
-float live_voltage_raw = 0;
+float live_voltage = 0, live_voltage_raw_unbuffered = 0;
 bool water_low = true;  // global status of water level in low pin
 bool water_full = false;
 bool motor_dry_run = false;
@@ -113,7 +112,7 @@ String generateHTML() {
   html += "footer { text-align: center; margin: 1rem; font-size: 0.9rem; color: #666; }";
   html += "</style></head><body>";
   html += "<header><h1>Smart Water Level Controller</h1><h2>by Lucent Technologies</h2></header>";
-  html += "<h2 style='text-align:center;'>Voltage: <span id='timer'>" + String(live_voltage_raw/VOLTAGE_CALIBRATION) + "</span> seconds</h2>";
+  html += "<h2 style='text-align:center;'>Voltage: <span id='timer'>" + String(live_voltage_raw_unbuffered/VOLTAGE_CALIBRATION) + "</span> seconds</h2>";
   html += "<h3 style='text-align:center;'>Status:</h3>";
   html += "<ul style='list-style-type: none; text-align: center; padding: 0;'>";
   html += "<li>Water Level Low: " + String(water_low ? "Yes" : "No") + "</li>";
@@ -188,7 +187,8 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.4,float update_d
     last_update_millis_voltage = millis();
 
     // Update buffers
-    voltage_buffer[buffer_index_voltage] = analogRead(VOLTAGE_SENSOR_PIN);
+    live_voltage_raw_unbuffered = analogRead(VOLTAGE_SENSOR_PIN);
+    voltage_buffer[buffer_index_voltage] = live_voltage_raw_unbuffered;
 
     // Increment buffer index
     buffer_index_voltage = (buffer_index_voltage + 1) % 5;
@@ -199,12 +199,9 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.4,float update_d
     for (int i = 0; i < 5; i++) {
       voltage_sum += voltage_buffer[i];
     }
-    live_voltage_raw = voltage_sum / 5;
+    live_voltage = voltage_sum / 5;
     if (VOLTAGE_CALIBRATION != 0) {
-      live_voltage = live_voltage_raw / VOLTAGE_CALIBRATION;
-    }
-    else {
-      live_voltage = live_voltage_raw;
+      live_voltage = live_voltage / VOLTAGE_CALIBRATION;
     }
 
   }
@@ -231,7 +228,7 @@ void handleSave() {
   if (server.hasArg("VOLTAGE_CALIBRATION")) 
   {
     if (server.arg("VOLTAGE_CALIBRATION").toFloat() != 0){
-      VOLTAGE_CALIBRATION = live_voltage_raw / server.arg("VOLTAGE_CALIBRATION").toFloat();
+      VOLTAGE_CALIBRATION = live_voltage_raw_unbuffered / server.arg("VOLTAGE_CALIBRATION").toFloat();
     }
   }
   if (server.hasArg("SAFETY_TIMEOUT")) SAFETY_TIMEOUT = server.arg("SAFETY_TIMEOUT").toInt();
@@ -260,7 +257,7 @@ void handleSave() {
 )rawliteral");
 }
 void handleTimer() {
-  server.send(200, "text/plain", String(live_voltage_raw/VOLTAGE_CALIBRATION));
+  server.send(200, "text/plain", String(live_voltage_raw_unbuffered/VOLTAGE_CALIBRATION));
 }
 void IRAM_ATTR manual_start_button_isr() {
   manual_start_button_pressed = true;
