@@ -10,9 +10,9 @@
 #define RELAY_MOTOR_PIN         13
 #define RELAY_STARTER_PIN       10
 
-#define WATERLEVEL_LOW_PIN      12
+#define WATERLEVEL_LOW_PIN      5
 #define WATERLEVEL_FULL_PIN     4
-#define WATERLEVEL_DRYRUN_PIN   5
+#define WATERLEVEL_DRYRUN_PIN   12
 
 #define MANUAL_START_BUTTON_PIN  9
 //#define SETUP_BUTTON_PIN         10
@@ -145,7 +145,7 @@ String generateHTML() {
   html += "</body></html>";
   return html;
 }
-void update_pin_statuses_and_voltage(float update_delay_pin = 0.2,float update_delay_voltage = 0.05) {
+void update_pin_statuses_and_voltage(float update_delay_pin = 0.4,float update_delay_voltage = 0.05) {
   static unsigned long last_update_millis_pins = 0;
   static unsigned long last_update_millis_voltage = 0;
   static bool water_low_buffer[5] = {false};
@@ -161,6 +161,7 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.2,float update_d
     water_low_buffer[buffer_index_pins] = !digitalRead(WATERLEVEL_LOW_PIN);
     water_full_buffer[buffer_index_pins] = !digitalRead(WATERLEVEL_FULL_PIN);
     motor_dry_run_buffer[buffer_index_pins] = !digitalRead(WATERLEVEL_DRYRUN_PIN);
+    
 
     // Increment buffer index
     buffer_index_pins = (buffer_index_pins + 1) % 5;
@@ -176,9 +177,9 @@ void update_pin_statuses_and_voltage(float update_delay_pin = 0.2,float update_d
       if (motor_dry_run_buffer[i]) motor_dry_run_count++;
     }
 
-    water_low = (water_low_count >= 3);
-    water_full = (water_full_count >= 3);
-    motor_dry_run = (motor_dry_run_count >= 3);
+    water_low = (water_low_count >= 1);
+    water_full = (water_full_count >= 1);
+    motor_dry_run = (motor_dry_run_count >= 1);
   }
   if (millis() - last_update_millis_voltage >= update_delay_voltage * 1000) {
     last_update_millis_voltage = millis();
@@ -346,6 +347,7 @@ void start_motor() {
   }
   if (live_voltage >= MOTOR_START_MIN_VOLTAGE_CUTOFF && live_voltage <= MOTOR_START_MAX_VOLTAGE_CUTOFF) {
     motor_running = true;
+    motor_running_status = 1;
     motor_starting_millis = millis();
     digitalWrite(RELAY_MOTOR_PIN, HIGH);
     digitalWrite(LED_MOTOR_ON_PIN, HIGH);
@@ -361,6 +363,7 @@ void start_motor() {
     digitalWrite(LED_LOW_HIGH_CUTOFF_PIN, HIGH);
     Serial.println("Voltage out of range, motor not started");
   }
+  
 }
 
 void stop_motor() {
@@ -376,7 +379,7 @@ void stop_motor() {
 
 
 void loop() {
-
+  update_pin_statuses_and_voltage();
   if (setup_mode) {
     server.handleClient();
     
@@ -384,12 +387,18 @@ void loop() {
   else { // Normal operation
     server.handleClient();
 
-    Serial.print("Water Low: ");
-    Serial.println(water_low);
-    Serial.print("Water Full: ");
-    Serial.println(water_full);
-    Serial.print("Motor Dry Run: ");
-    Serial.println(motor_dry_run);
+    Serial.print("Water Low:\t");
+    Serial.print(water_low);
+    Serial.print("\tWater Full:\t");
+    Serial.print(water_full);
+    Serial.print("\tMotor Dry Run:\t");
+    Serial.print(motor_dry_run);
+    Serial.print("\tVoltage:\t");
+    Serial.print(live_voltage);
+    Serial.print("\tMotor Running:\t");
+    Serial.print(motor_running);
+    Serial.print("\tMotor Running Status:\t");
+    Serial.println(motor_running_status);
 
     if (!motor_running) {
       if (dryrun_cutoff_status){
